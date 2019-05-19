@@ -1,45 +1,22 @@
 version: 2
 jobs:
-  build:
+  deploy:
     docker:
-      - image: cibuilds/hugo:latest
-    working_directory: ~/hugo
-    environment:
-      HUGO_BUILD_DIR: ~/hugo/public
+      - image: circleci/python:2.7-jessie
     steps:
-
-      # install git
-      - run: apk update && apk add git
-
-      # checkout the repository
       - checkout
-
-      # install git submodules for managing third-party dependencies
-      - run: git submodule sync && git submodule update --init
-
       - run:
-          name: install AWS CLI (first install pip, the Python package manager)
-          command: |
-            apk add --update python python-dev py-pip build-base
-            pip install awscli
-
-      # build with Hugo
-      - run: HUGO_ENV=production hugo -v -d $HUGO_BUILD_DIR
- 
+          name: Branch name
+          command: echo "${CIRCLE_BRANCH}"
       - run:
-          name: test our generated HTML files
-          command: |
-            htmlproofer $HUGO_BUILD_DIR --allow-hash-href --check-html \
-            --empty-alt-ignore --disable-external
+          name: Install awscli
+          command: sudo pip install awscli
+      - run:
+          name: Deploy to S3 bucket
+          command: aws s3 sync . s3://ludum-dare-44/${CIRCLE_BRANCH} --exclude '.circleci/*' --exclude '.git/*'  
 
-      # `deploy` step: identical to a `run` step, but uses only one container:
-      # https://circleci.com/docs/2.0/configuration-reference/#deploy 
-      - deploy:
-          name: deploy to AWS
-          command: |
-            if [ "${CIRCLE_BRANCH}" = "master" ]; then
-              aws s3 sync $HUGO_BUILD_DIR \
-              s3://your-bucket-name/your-subfolder --delete
-            else
-              echo "Not master branch, dry run only"
-            fi
+workflows:
+  version: 2
+  build-deploy:
+    jobs:
+      - deploy
